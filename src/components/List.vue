@@ -7,13 +7,13 @@
     <ul>
       <li
         class="mb-4"
-        v-for="(specification, index) in specifications"
+        v-for="(specification, index) in configuration.getSpecifications()"
         :key="index"
       >
         <div
           class="header cursor-pointer bg-gray-200 px-3 py-2 border border-gray-500 text-center"
           :class="
-            selectedCarSpecificationId === index
+            selectedSpecificationIndex === index
               ? 'rounded-t-md border-b-0'
               : 'rounded-md'
           "
@@ -24,17 +24,11 @@
 
         <div
           class="content text-center py-2 border border-dashed border-gray-500"
-          v-if="selectedCarSpecificationId === index"
+          v-if="selectedSpecificationIndex === index"
         >
-          <p>Engine - {{ specification.engine.name || "N/A" }}</p>
-          <p>Color - {{ specification.exterior.color.name || "N/A" }}</p>
-          <p>Paint Type - {{ specification.exterior.color.type || "N/A" }}</p>
-          <p>
-            Interior Material -
-            {{ specification.interiorMaterial.name || "N/A" }}
+          <p v-for="field in specification.fields">
+            {{ field.label }} - {{ field.value || "N/A" }}
           </p>
-          <p>Wheel rims - {{ specification.exterior.wheel.rims || "N/A" }}</p>
-          <p>Wheel model - {{ specification.exterior.wheel.model || "N/A" }}</p>
         </div>
       </li>
     </ul>
@@ -51,23 +45,12 @@
 </template>
 
 <script lang="ts" setup>
-import { defineEmits, defineProps } from "vue";
-import { Specification } from "../models/Specification";
-
-interface ListProps {
-  selectedCarSpecificationId: number;
-  specifications: Specification[];
-}
-interface ListEmits {
-  (e: "update:selected-car-specification-id", id: number): void;
-}
-
-const props = defineProps<ListProps>();
-const emit = defineEmits<ListEmits>();
+import {
+  configuration,
+  selectedSpecificationIndex
+} from "../store/configuration";
 
 const selectSpecification = async (id: number = 0) =>
-  emit(
-    "update:selected-car-specification-id",
-    id === props.selectedCarSpecificationId ? -1 : id
-  );
+  (selectedSpecificationIndex.value =
+    id === selectedSpecificationIndex.value ? -1 : id);
 </script>

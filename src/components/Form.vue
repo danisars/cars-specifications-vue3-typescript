@@ -4,124 +4,193 @@
       {{ title }}
     </h1>
 
-    <form-group label="Name Of Specification*">
-      <form-input v-model="formModel.name" />
-    </form-group>
-
-    <form-group label="Engine*">
-      <form-select v-model="formModel.engine" :options="engineOptions" />
-    </form-group>
-
-    <form-group label="Color*">
-      <form-select v-model="formModel.color" :options="colorOptions" />
-    </form-group>
-
-    <form-group label="Color Type">
-      <form-select v-model="formModel.colorType" :options="colorTypeOptions" />
-    </form-group>
-
-    <form-group label="Interior Material">
+    <form-group v-for="field in specification.fields" :label="field.label">
+      <form-input v-if="field.type === FieldType.Input" v-model="field.value" />
       <form-select
-        v-model="formModel.interiorMaterial"
-        :options="interiorOptions"
+        v-else-if="field.type === FieldType.Select"
+        :options="field.options"
+        v-model="field.value"
       />
-    </form-group>
-
-    <form-group label="Wheel Rims">
-      <form-select v-model="formModel.wheelRims" :options="rimsOptions" />
-    </form-group>
-
-    <form-group label="Wheel Model">
-      <form-select v-model="formModel.wheelModel" :options="modelOptions" />
     </form-group>
 
     <div class="flex gap-x-4 justify-between text-center mt-8">
       <button
         class="bg-blue-500 text-white rounded-lg px-4 py-2"
-        @click="$emit('update:showNewOption', true)"
-        v-if="!showNewOption"
+        @click="toggleModal"
       >
         + New configuration option
       </button>
       <button
         class="bg-green-500 text-white rounded-lg px-4 py-2"
-        :class="{ 'cursor-not-allowed bg-gray-200': !isFormValid }"
-        :disabled="!isFormValid"
         @click="onSubmit"
       >
         {{ submitCaption }}
       </button>
     </div>
+
+    <div
+      v-if="isModalActive"
+      class="absolute top-0 left-0 z-50  h-screen w-screen flex justify-center items-center"
+    >
+      <div
+        class="fixed w-full h-full bg-black/[0.5] -z-10"
+        @click="toggleModal"
+      />
+      <div class="w-[300px] min-h-[300px] bg-white p-5 flex flex-col">
+        <form @submit.prevent class="flex-auto">
+          <form-group label="Label">
+            <form-input
+              v-model="configurationOption.label"
+              placeholder="Enter label"
+            />
+          </form-group>
+          <form-group label="Type">
+            <form-select
+              v-model="configurationOption.type"
+              :options="fieldTypeOptions"
+            />
+          </form-group>
+
+          <div
+            v-if="configurationOption.type === FieldType.Select"
+            class="mb-5"
+          >
+            <div class="grid grid-cols-2 gap-3">
+              <template
+                v-for="option in configurationOption.typeInstance.options"
+              >
+                <form-group label="Label">
+                  <form-input v-model="option.label" />
+                </form-group>
+                <form-group label="Value">
+                  <form-input v-model="option.value" />
+                </form-group>
+              </template>
+              <form-group label="Label">
+                <form-input v-model="selectOption.label" />
+              </form-group>
+              <form-group label="Value">
+                <form-input v-model="selectOption.value" />
+              </form-group>
+            </div>
+            <div class="flex justify-end">
+              <button
+                class="inline-block text-green-400"
+                @click="onAddSelectOption"
+              >
+                + Add new option
+              </button>
+            </div>
+          </div>
+        </form>
+        <button
+          class="bg-green-400 rounded-md py-2 text-white"
+          @click="onClickAddConfigurationOption"
+        >
+          Add
+        </button>
+      </div>
+    </div>
   </div>
 </template>
 
 <script lang="ts" setup>
-import { computed, defineEmits, defineProps } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 import FormGroup from "./ui/form/FormGroup.vue";
 import FormInput from "./ui/form/FormInput.vue";
 import FormSelect from "./ui/form/FormSelect.vue";
 import { SelectOption } from "../interface/select";
+import _ from "lodash";
+
 import {
-  Car,
-  CarColor,
-  CarEngine,
-  CarInterior,
-  CarModel,
-  CarRims
-} from "../interface/car";
-import { Specification } from "../models/Specification";
-import { ColorType } from "../models/Color";
+  FieldType,
+  InputField,
+  NewSpecification,
+  SelectField
+} from "../models/new/Configurator";
+import {
+  configuration,
+  selectedSpecificationIndex
+} from "../store/configuration";
 
-interface FormProps {
-  activeSpecId: number;
-  form: Record<string, string>;
-  showNewOption: boolean;
-}
-interface FormEmits {
-  (e: "create"): void;
-  (e: "update", index: number): void;
-  (e: "update:form", value: Record<string, string>): void;
-  (e: "update:show-new-option", value: boolean): void;
-}
+const isModalActive = ref(false);
+const toggleModal = () => (isModalActive.value = !isModalActive.value);
 
-const props = defineProps<FormProps>();
-const emit = defineEmits<FormEmits>();
+const specification = ref(new NewSpecification());
+watch(
+  () => selectedSpecificationIndex.value,
+  index => {
+    if (index < 0) {
+      specification.value = new NewSpecification();
+      return;
+    }
 
-const formModel = computed({
-  get() {
-    return props.form;
-  },
-  set(value) {
-    emit("update:form", value);
+    const selectedSpecification = configuration.findSpecificationByIndex(index);
+
+    if (!selectedSpecification) return;
+
+    specification.value = _.cloneDeep(selectedSpecification);
   }
+);
+
+const configurationOption = reactive<Record<string, any>>({
+  label: "",
+  type: "",
+  typeInstance: null
 });
-
-const title = computed(() =>
-  props.activeSpecId >= 0 ? "Update specification" : "Add new specification"
+const selectOption = reactive({
+  label: "",
+  value: ""
+});
+watch(
+  () => configurationOption.type,
+  type => {
+    if (type === FieldType.Select)
+      configurationOption.typeInstance = new SelectField(
+        configurationOption.label
+      );
+    else
+      configurationOption.typeInstance = new InputField(
+        configurationOption.label
+      );
+  }
 );
-const submitCaption = computed(() =>
-  props.activeSpecId >= 0 ? "Update" : "Create"
-);
-
+const onAddSelectOption = () => {
+  configurationOption.typeInstance.addOption(
+    JSON.parse(JSON.stringify(selectOption))
+  );
+  selectOption.label = selectOption.value = "";
+};
+const onClickAddConfigurationOption = () => {
+  specification.value.fieldBuilder.addField(configurationOption.typeInstance);
+  configurationOption.label = configurationOption.type = selectOption.value = selectOption.label =
+    "";
+  configurationOption.typeInstance = null;
+};
 const convertEnumToSelectOptions = (
   object: Record<string, string>
 ): SelectOption[] =>
-  Object.entries(object).map(([, label]) => ({ label, value: label }));
+  Object.entries(object).map(([label, value]) => ({ label, value }));
 
-const engineOptions = convertEnumToSelectOptions(CarEngine);
-const colorOptions = convertEnumToSelectOptions(CarColor);
-const interiorOptions = convertEnumToSelectOptions(CarInterior);
-const rimsOptions = convertEnumToSelectOptions(CarRims);
-const modelOptions = convertEnumToSelectOptions(CarModel);
-const colorTypeOptions = convertEnumToSelectOptions(ColorType);
+const fieldTypeOptions = convertEnumToSelectOptions(FieldType);
 
-const isFormValid = computed(() => {
-  return props.form.name && props.form.engine && props.form.color;
-});
+const title = computed(() =>
+  selectedSpecificationIndex.value >= 0
+    ? "Update specification"
+    : "Add new specification"
+);
+const submitCaption = computed(() =>
+  selectedSpecificationIndex.value >= 0 ? "Update" : "Create"
+);
 
 const onSubmit = () => {
-  if (!isFormValid) return;
+  selectedSpecificationIndex.value >= 0
+    ? configuration.updateSpecification(
+        selectedSpecificationIndex.value,
+        specification.value as NewSpecification
+      )
+    : configuration.addSpecification(specification.value as NewSpecification);
 
-  props.activeSpecId >= 0 ? emit("update", props.activeSpecId) : emit("create");
+  specification.value = new NewSpecification();
 };
 </script>
